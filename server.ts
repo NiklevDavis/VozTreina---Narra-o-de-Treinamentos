@@ -176,16 +176,25 @@ async function synthesizeKokoro82M(
       return origValidate(voiceName);
     };
 
-    // Load local PT-BR voice binaries (.bin)
+    // Load local PT-BR voice binaries (.bin) and create a mutable customVoices dictionary
+    const customVoices = { ...kokoroInstance.voices };
     const ptbrVoices = ["pf_dora", "pm_alex", "pm_santa"];
+
     for (const vId of ptbrVoices) {
       const binPath = path.join(process.cwd(), "node_modules", "kokoro-js", "voices", `${vId}.bin`);
       if (fs.existsSync(binPath)) {
         const buf = fs.readFileSync(binPath);
         const floatArr = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
-        kokoroInstance.voices[vId] = floatArr;
+        customVoices[vId] = floatArr;
       }
     }
+
+    // Override voices property getter on kokoroInstance
+    Object.defineProperty(kokoroInstance, "voices", {
+      get: () => customVoices,
+      configurable: true,
+      enumerable: true,
+    });
 
     console.log("✅ Modelo Kokoro-82M pronto com as vozes oficiais PT-BR (Dora, Alex, Santa)!");
   }
