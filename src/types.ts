@@ -1,6 +1,6 @@
 export type NarrationPacing = 'pausado' | 'normal' | 'rapido' | 'expressivo';
 
-export type TTSEngine = 'kokoro-82m' | 'gemini-flash' | 'cloud-neural2' | 'browser-native';
+export type TTSEngine = 'chatterbox-ptbr' | 'kokoro-82m' | 'gemini-flash' | 'cloud-neural2' | 'browser-native';
 
 export interface TTSEngineOption {
   id: TTSEngine;
@@ -10,6 +10,12 @@ export interface TTSEngineOption {
 }
 
 export const TTS_ENGINE_OPTIONS: TTSEngineOption[] = [
+  {
+    id: 'chatterbox-ptbr',
+    label: 'Chatterbox Multilingual PT-BR (Resemble AI)',
+    badge: 'Resemble AI SOTA',
+    description: 'Modelo de última geração fine-tuned para Português do Brasil (ResembleAI/Chatterbox-Multilingual-pt-br).',
+  },
   {
     id: 'kokoro-82m',
     label: 'Kokoro-82M (Hugging Face)',
@@ -33,6 +39,25 @@ export const TTS_ENGINE_OPTIONS: TTSEngineOption[] = [
     label: 'Voz Nativa do Navegador (PT-BR)',
     badge: 'Offline Local',
     description: 'Sintetizador local no computador, sem uso de internet ou cotas de API.',
+  },
+];
+
+export const CHATTERBOX_VOICES: VoiceOption[] = [
+  {
+    id: 'chatterbox_ptbr_f',
+    name: 'Resemble PT-BR (Feminino)',
+    gender: 'Feminino',
+    title: 'Voz Neural Fluida & Expressiva',
+    description: 'Síntese vocal de alta fidelidade ajustada pela Resemble AI para Português do Brasil.',
+    idealFor: 'Narração de Cursos, Apresentações Corporativas, Onboarding',
+  },
+  {
+    id: 'chatterbox_ptbr_m',
+    name: 'Resemble PT-BR (Masculino)',
+    gender: 'Masculino',
+    title: 'Voz Neural Executiva',
+    description: 'Síntese masculina com dicção impecável e cadência profissional.',
+    idealFor: 'Treinamentos de Vendas, Compliance, Vídeos Institucionais',
   },
 ];
 

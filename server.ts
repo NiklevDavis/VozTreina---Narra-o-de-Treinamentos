@@ -212,6 +212,65 @@ async function synthesizeKokoro82M(
   };
 }
 
+let chatterboxClient: any = null;
+
+/**
+ * Synthesizes speech using Resemble AI Chatterbox Multilingual PT-BR model
+ * Repo: ResembleAI/Chatterbox-Multilingual-pt-br
+ * Space: ResembleAI/Chatterbox-Multilingual-TTS-pt-br
+ */
+async function synthesizeChatterboxPTBR(
+  text: string,
+  voice = "chatterbox_ptbr_f",
+  pacing = "normal"
+): Promise<{ audioUrl: string; duration: number; voiceUsed: string }> {
+  if (!chatterboxClient) {
+    console.log("⚡ Conectando ao modelo Chatterbox Multilingual PT-BR (Resemble AI)...");
+    const gradioPath = path.join(process.cwd(), "node_modules", "@gradio", "client", "dist", "index.js");
+    const { Client } = await import("file:///" + gradioPath.replace(/\\/g, "/"));
+    chatterboxClient = await Client.connect("ResembleAI/Chatterbox-Multilingual-TTS-pt-br");
+    console.log("✅ Conectado ao Chatterbox Multilingual PT-BR com sucesso!");
+  }
+
+  const defaultRefAudio = chatterboxClient.config.components.find((c: any) => c.id === 5)?.props?.value;
+
+  let speedMultiplier = 0.5; // default CFG/Pace
+  if (pacing === "pausado") speedMultiplier = 0.4;
+  else if (pacing === "rapido") speedMultiplier = 0.6;
+
+  const result = await chatterboxClient.predict("/generate_tts_audio", [
+    text.trim(),
+    defaultRefAudio,
+    0.5, // Exaggeration
+    0.8, // Temperature
+    0,   // Seed
+    speedMultiplier, // CFG/Pace
+  ]);
+
+  const outputUrl = result.data?.[0]?.url;
+  if (!outputUrl) {
+    throw new Error("Resposta de áudio inválida do Chatterbox Multilingual PT-BR.");
+  }
+
+  const audioRes = await fetch(outputUrl);
+  if (!audioRes.ok) {
+    throw new Error(`Falha ao baixar áudio do Chatterbox: HTTP ${audioRes.status}`);
+  }
+
+  const audioBuf = await audioRes.arrayBuffer();
+  const base64Wav = Buffer.from(audioBuf).toString("base64");
+  const audioDataUrl = `data:audio/wav;base64,${base64Wav}`;
+  const durationSeconds = +(audioBuf.byteLength / (24000 * 2)).toFixed(1);
+
+  const voiceName = voice === "chatterbox_ptbr_m" ? "Resemble PT-BR Masculino" : "Resemble PT-BR Feminino";
+
+  return {
+    audioUrl: audioDataUrl,
+    duration: durationSeconds,
+    voiceUsed: `${voiceName} (Chatterbox Multilingual PT-BR)`,
+  };
+}
+
 // Single / Multi-speaker Narration Generator Endpoint
 app.post("/api/tts/generate", async (req, res) => {
   try {
@@ -228,6 +287,23 @@ app.post("/api/tts/generate", async (req, res) => {
 
     if (!text || typeof text !== "string" || !text.trim()) {
       return res.status(400).json({ error: "Texto da narração é necessário." });
+    }
+
+    // Explicit Chatterbox Multilingual PT-BR selection
+    if (!isMultiSpeaker && engine === "chatterbox-ptbr") {
+      try {
+        const chatterResult = await synthesizeChatterboxPTBR(text, voice, pacing);
+        return res.json({
+          audioUrl: chatterResult.audioUrl,
+          duration: chatterResult.duration,
+          sampleRate: 24000,
+          format: "wav",
+          voiceUsed: chatterResult.voiceUsed,
+        });
+      } catch (chatterErr: any) {
+        console.error("Chatterbox Error:", chatterErr);
+        return res.status(500).json({ error: "Erro ao sintetizar áudio com Chatterbox Multilingual PT-BR: " + chatterErr.message });
+      }
     }
 
     // Explicit Kokoro-82M selection

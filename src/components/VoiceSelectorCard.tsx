@@ -1,5 +1,5 @@
 import React from 'react';
-import { GEMINI_VOICES, KOKORO_VOICES, VoiceOption, TTSEngine } from '../types';
+import { GEMINI_VOICES, KOKORO_VOICES, CHATTERBOX_VOICES, VoiceOption, TTSEngine } from '../types';
 import { UserCheck, Sparkles, Check } from 'lucide-react';
 
 interface VoiceSelectorCardProps {
@@ -15,7 +15,17 @@ export const VoiceSelectorCard: React.FC<VoiceSelectorCardProps> = ({
   label = "Selecione a Voz do Locutor",
   selectedEngine = "gemini-flash",
 }) => {
-  const voicesList = selectedEngine === "kokoro-82m" ? KOKORO_VOICES : GEMINI_VOICES;
+  const voicesList = selectedEngine === "kokoro-82m" 
+    ? KOKORO_VOICES 
+    : selectedEngine === "chatterbox-ptbr" 
+    ? CHATTERBOX_VOICES 
+    : GEMINI_VOICES;
+
+  const engineLabel = selectedEngine === "kokoro-82m" 
+    ? "Kokoro-82M" 
+    : selectedEngine === "chatterbox-ptbr" 
+    ? "Chatterbox PT-BR" 
+    : "Gemini";
 
   return (
     <div className="space-y-3">
@@ -25,7 +35,7 @@ export const VoiceSelectorCard: React.FC<VoiceSelectorCardProps> = ({
           {label}
         </label>
         <span className="text-xs text-slate-500">
-          {voicesList.length} Vozes {selectedEngine === "kokoro-82m" ? "Kokoro-82M" : "Gemini"} Disponíveis
+          {voicesList.length} Vozes {engineLabel} Disponíveis
         </span>
       </div>
 
