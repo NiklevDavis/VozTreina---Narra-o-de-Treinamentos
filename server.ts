@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import { createRequire } from "module";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI, Modality } from "@google/genai";
@@ -16,6 +17,8 @@ import {
 } from "./db";
 
 dotenv.config();
+
+const appRequire = createRequire(path.join(process.cwd(), "package.json"));
 
 // Inicializar banco de dados SQLite local
 initDb();
@@ -318,8 +321,7 @@ async function synthesizeRazo(
 
   if (!razoSession || !razoConfig) {
     console.log("⚡ Inicializando sessão ONNX do modelo Razo Piper...");
-    const ortPath = path.join(process.cwd(), "node_modules", "onnxruntime-node");
-    const ort = require(ortPath);
+    const ort = appRequire("onnxruntime-node");
     razoConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
     razoSession = await ort.InferenceSession.create(modelPath);
     console.log("✅ Modelo Razo Piper ONNX pronto para síntese local em CPU!");
@@ -343,8 +345,7 @@ async function synthesizeRazo(
   if (pacing === "pausado") lengthScale = 1.18;
   else if (pacing === "rapido") lengthScale = 0.85;
 
-  const ortPath = path.join(process.cwd(), "node_modules", "onnxruntime-node");
-  const ort = require(ortPath);
+  const ort = appRequire("onnxruntime-node");
 
   const inputTensor = new ort.Tensor("int64", BigInt64Array.from(phonemeIds.map(BigInt)), [1, phonemeIds.length]);
   const inputLengthsTensor = new ort.Tensor("int64", BigInt64Array.from([BigInt(phonemeIds.length)]), [1]);
