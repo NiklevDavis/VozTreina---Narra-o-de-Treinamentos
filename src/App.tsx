@@ -60,6 +60,29 @@ export default function App() {
 
   // Optimizer Modal
   const [isOptimizerModalOpen, setIsOptimizerModalOpen] = useState(false);
+  const [isDraggingStudioFile, setIsDraggingStudioFile] = useState(false);
+
+  const handleStudioDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingStudioFile(false);
+
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const content = ev.target?.result as string;
+      if (content) {
+        setScriptText(content);
+        if (file.name) {
+          setScriptTitle(file.name.replace(/\.[^/.]+$/, ''));
+        }
+      }
+    };
+    reader.readAsText(file);
+  };
 
   // History State
   const [history, setHistory] = useState<AudioHistoryItem[]>(() => {
@@ -340,7 +363,34 @@ export default function App() {
             />
 
             {/* Script Text Editor */}
-            <div className="bg-[#14161B] border border-white/5 rounded-2xl p-6 shadow-xl space-y-4">
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!isDraggingStudioFile) setIsDraggingStudioFile(true);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsDraggingStudioFile(false);
+              }}
+              onDrop={handleStudioDrop}
+              className={`bg-[#14161B] border rounded-2xl p-6 shadow-xl space-y-4 relative transition-all ${
+                isDraggingStudioFile
+                  ? 'border-indigo-500 bg-indigo-950/20 ring-2 ring-indigo-500/40'
+                  : 'border-white/5'
+              }`}
+            >
+              {isDraggingStudioFile && (
+                <div className="absolute inset-0 bg-indigo-950/80 backdrop-blur-xs rounded-2xl border-2 border-dashed border-indigo-400 z-20 flex flex-col items-center justify-center text-center p-6 space-y-2 pointer-events-none animate-fade-in">
+                  <FileText className="w-10 h-10 text-indigo-400 animate-bounce" />
+                  <h4 className="text-base font-bold text-white">Solte o arquivo de texto aqui</h4>
+                  <p className="text-xs text-indigo-200">
+                    O conteúdo do arquivo será carregado diretamente no roteiro de narração
+                  </p>
+                </div>
+              )}
+
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-3">
                 <div className="flex items-center space-x-2">
                   <FileText className="w-4 h-4 text-indigo-400" />
@@ -400,7 +450,7 @@ export default function App() {
                 placeholder={
                   isMultiSpeaker
                     ? `Escreva o diálogo usando o nome dos personagens:\n\n${speaker1.name}: Olá, seja bem-vindo ao treinamento de hoje.\n${speaker2.name}: Obrigado! Quais são os tópicos principais?`
-                    : 'Digite ou cole aqui o texto em português que será lido pelo locutor...'
+                    : 'Digite, cole ou arraste um arquivo de texto (.txt/.md) aqui com o roteiro em português...'
                 }
                 className="w-full h-44 p-4 text-sm bg-[#0D0E12] border border-white/10 rounded-xl focus:border-indigo-500 outline-none resize-none font-sans leading-relaxed text-slate-200 placeholder-slate-600"
               />

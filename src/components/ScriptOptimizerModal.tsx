@@ -134,12 +134,29 @@ export const ScriptOptimizerModal: React.FC<ScriptOptimizerModalProps> = ({
           {/* Raw Input */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold uppercase text-slate-400 tracking-wider">
-              Cole o texto bruto, conteúdo do slide ou tópicos:
+              Cole ou arraste o texto bruto, conteúdo do slide ou arquivo:
             </label>
             <textarea
               value={rawText}
               onChange={(e) => setRawText(e.target.value)}
-              placeholder="Cole aqui o conteúdo cru da sua apresentação, tópicos do treinamento ou notas do slide..."
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const files = e.dataTransfer.files;
+                if (files && files.length > 0) {
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                    const content = ev.target?.result as string;
+                    if (content) setRawText(content);
+                  };
+                  reader.readAsText(files[0]);
+                }
+              }}
+              placeholder="Cole ou arraste aqui um arquivo de texto (.txt/.md), tópicos do treinamento ou notas do slide..."
               className="w-full h-32 p-3 text-sm bg-[#0D0E12] border border-white/10 rounded-xl focus:border-indigo-500 outline-none resize-none font-sans text-slate-200 placeholder-slate-600"
             />
           </div>

@@ -59,6 +59,7 @@ export const SlideCourseManager: React.FC<SlideCourseManagerProps> = ({ onSaveTo
   const [currentlyPlayingSlideId, setCurrentlyPlayingSlideId] = useState<string | null>(null);
   const [isGeneratingBatch, setIsGeneratingBatch] = useState(false);
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
+  const [dragOverSlideId, setDragOverSlideId] = useState<string | null>(null);
 
   // Handle slide image file upload
   const handleSlideImageUpload = (slideId: string, file: File) => {
@@ -71,6 +72,31 @@ export const SlideCourseManager: React.FC<SlideCourseManagerProps> = ({ onSaveTo
       );
     };
     reader.readAsDataURL(file);
+  };
+
+  // Handle Drag & Drop of image or text files onto a slide
+  const handleSlideDrop = (slideId: string, e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverSlideId(null);
+
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+    if (file.type.startsWith('image/')) {
+      handleSlideImageUpload(slideId, file);
+    } else {
+      // Treat as text/script file (.txt, .md, etc.)
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const textContent = event.target?.result as string;
+        if (textContent) {
+          updateSlide(slideId, 'script', textContent);
+        }
+      };
+      reader.readAsText(file);
+    }
   };
 
   // Remove slide image
@@ -263,106 +289,145 @@ export const SlideCourseManager: React.FC<SlideCourseManagerProps> = ({ onSaveTo
 
       {/* Slide Cards List */}
       <div className="space-y-4">
-        {slides.map((slide) => (
-          <div
-            key={slide.id}
-            className="bg-[#14161B] border border-white/5 rounded-2xl p-5 shadow-xl hover:border-white/10 transition-all space-y-4 text-slate-200"
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-white/5">
-              <div className="flex items-center space-x-3">
-                <span className="w-7 h-7 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 font-mono font-bold text-xs flex items-center justify-center shrink-0">
-                  {slide.slideNumber}
-                </span>
-                <input
-                  type="text"
-                  value={slide.title}
-                  onChange={(e) => updateSlide(slide.id, 'title', e.target.value)}
-                  className="font-bold text-white text-sm sm:text-base border-b border-transparent hover:border-white/20 focus:border-indigo-500 outline-none w-full sm:w-80 bg-transparent"
-                />
-              </div>
-
-              {/* Status and Action Buttons */}
-              <div className="flex items-center space-x-2">
-                {slide.status === 'generating' && (
-                  <span className="flex items-center space-x-1.5 text-xs text-indigo-400 font-semibold bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-lg">
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Gerando...</span>
+        {slides.map((slide) => {
+          const isDragOver = dragOverSlideId === slide.id;
+          return (
+            <div
+              key={slide.id}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (dragOverSlideId !== slide.id) setDragOverSlideId(slide.id);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (dragOverSlideId === slide.id) setDragOverSlideId(null);
+              }}
+              onDrop={(e) => handleSlideDrop(slide.id, e)}
+              className={`bg-[#14161B] border rounded-2xl p-5 shadow-xl transition-all space-y-4 text-slate-200 relative ${
+                isDragOver
+                  ? 'border-indigo-500 bg-indigo-950/20 ring-2 ring-indigo-500/40'
+                  : 'border-white/5 hover:border-white/10'
+              }`}
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-white/5">
+                <div className="flex items-center space-x-3">
+                  <span className="w-7 h-7 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 font-mono font-bold text-xs flex items-center justify-center shrink-0">
+                    {slide.slideNumber}
                   </span>
-                )}
+                  <input
+                    type="text"
+                    value={slide.title}
+                    onChange={(e) => updateSlide(slide.id, 'title', e.target.value)}
+                    className="font-bold text-white text-sm sm:text-base border-b border-transparent hover:border-white/20 focus:border-indigo-500 outline-none w-full sm:w-80 bg-transparent"
+                  />
+                </div>
 
-                {slide.status === 'ready' && (
-                  <span className="flex items-center space-x-1 text-xs text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Pronto ({formatTime(slide.duration || 0)})</span>
-                  </span>
-                )}
-
-                {slide.status === 'error' && (
-                  <span className="flex items-center space-x-1 text-xs text-rose-400 font-semibold bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 rounded-lg">
-                    <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
-                    <span>Erro</span>
-                  </span>
-                )}
-
-                <button
-                  onClick={() => generateSlideAudio(slide.id)}
-                  disabled={slide.status === 'generating' || !slide.script.trim()}
-                  className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow-md shadow-indigo-900/30 flex items-center space-x-1 transition-all"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                  <span>Gerar Slide</span>
-                </button>
-
-                {slides.length > 1 && (
-                  <button
-                    onClick={() => removeSlide(slide.id)}
-                    className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-white/5 rounded-lg transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Slide Visual Image & Script Split Layout */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Slide Image Attachment / Preview */}
-              <div className="md:col-span-1 bg-[#0D0E12] border border-white/10 rounded-xl p-3 flex flex-col items-center justify-center min-h-[120px] relative group overflow-hidden">
-                {slide.imageUrl ? (
-                  <div className="relative w-full h-28 rounded-lg overflow-hidden group">
-                    <img
-                      src={slide.imageUrl}
-                      alt={slide.title}
-                      className="w-full h-full object-cover"
-                    />
-                    <button
-                      onClick={() => removeSlideImage(slide.id)}
-                      className="absolute top-1 right-1 bg-black/70 text-rose-400 p-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black"
-                      title="Remover Imagem"
-                    >
-                      <XCircle className="w-4 h-4" />
-                    </button>
-                    <span className="absolute bottom-1 left-1 bg-black/60 text-white font-mono text-[9px] px-1.5 py-0.5 rounded backdrop-blur-xs">
-                      Imagem Anexada
+                {/* Status and Action Buttons */}
+                <div className="flex items-center space-x-2">
+                  {slide.status === 'generating' && (
+                    <span className="flex items-center space-x-1.5 text-xs text-indigo-400 font-semibold bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-lg">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Gerando...</span>
                     </span>
-                  </div>
-                ) : (
-                  <label className="w-full h-full flex flex-col items-center justify-center p-3 border border-dashed border-white/10 hover:border-indigo-500/50 rounded-lg cursor-pointer bg-white/2 hover:bg-white/5 transition-all text-center">
-                    <FileImage className="w-6 h-6 text-indigo-400 mb-1" />
-                    <span className="text-xs font-bold text-slate-200">Anexar Slide (Imagem / PNG)</span>
-                    <span className="text-[10px] text-slate-500 mt-0.5">Clique ou arraste a imagem do slide</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleSlideImageUpload(slide.id, file);
-                      }}
-                      className="hidden"
-                    />
-                  </label>
-                )}
+                  )}
+
+                  {slide.status === 'ready' && (
+                    <span className="flex items-center space-x-1 text-xs text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Pronto ({formatTime(slide.duration || 0)})</span>
+                    </span>
+                  )}
+
+                  {slide.status === 'error' && (
+                    <span className="flex items-center space-x-1 text-xs text-rose-400 font-semibold bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 rounded-lg">
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Erro</span>
+                    </span>
+                  )}
+
+                  <button
+                    onClick={() => generateSlideAudio(slide.id)}
+                    disabled={slide.status === 'generating' || !slide.script.trim()}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow-md shadow-indigo-900/30 flex items-center space-x-1 transition-all"
+                  >
+                    <Volume2 className="w-3.5 h-3.5" />
+                    <span>Gerar Slide</span>
+                  </button>
+
+                  {slides.length > 1 && (
+                    <button
+                      onClick={() => removeSlide(slide.id)}
+                      className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-white/5 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {/* Slide Visual Image & Script Split Layout */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Slide Image Attachment / Preview */}
+                <div className="md:col-span-1 bg-[#0D0E12] border border-white/10 rounded-xl p-3 flex flex-col items-center justify-center min-h-[120px] relative group overflow-hidden">
+                  {slide.imageUrl ? (
+                    <div className="relative w-full h-28 rounded-lg overflow-hidden group">
+                      <img
+                        src={slide.imageUrl}
+                        alt={slide.title}
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        onClick={() => removeSlideImage(slide.id)}
+                        className="absolute top-1 right-1 bg-black/70 text-rose-400 p-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black"
+                        title="Remover Imagem"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </button>
+                      <span className="absolute bottom-1 left-1 bg-black/60 text-white font-mono text-[9px] px-1.5 py-0.5 rounded backdrop-blur-xs">
+                        Imagem Anexada
+                      </span>
+                    </div>
+                  ) : (
+                    <label
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      onDrop={(e) => handleSlideDrop(slide.id, e)}
+                      className={`w-full h-full flex flex-col items-center justify-center p-3 border border-dashed rounded-lg cursor-pointer transition-all text-center ${
+                        isDragOver
+                          ? 'border-indigo-400 bg-indigo-500/20 text-white'
+                          : 'border-white/10 hover:border-indigo-500/50 bg-white/2 hover:bg-white/5 text-slate-200'
+                      }`}
+                    >
+                      <FileImage className="w-6 h-6 text-indigo-400 mb-1" />
+                      <span className="text-xs font-bold">Anexar Slide (Imagem / PNG)</span>
+                      <span className="text-[10px] text-slate-500 mt-0.5">Clique ou arraste a imagem / arquivo de texto aqui</span>
+                      <input
+                        type="file"
+                        accept="image/*,.txt,.md"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            if (file.type.startsWith('image/')) {
+                              handleSlideImageUpload(slide.id, file);
+                            } else {
+                              const reader = new FileReader();
+                              reader.onload = (ev) => {
+                                const textContent = ev.target?.result as string;
+                                if (textContent) updateSlide(slide.id, 'script', textContent);
+                              };
+                              reader.readAsText(file);
+                            }
+                          }
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
 
               {/* Script Textarea for Slide */}
               <div className="md:col-span-2">
