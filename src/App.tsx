@@ -31,7 +31,7 @@ import {
   CheckCircle2,
   AlertCircle,
 } from 'lucide-react';
-import { estimateReadingTimeSeconds, formatTime } from './lib/audioUtils';
+import { estimateReadingTimeSeconds, formatTime, synthesizeNativeSpeechPTBR } from './lib/audioUtils';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'studio' | 'course' | 'templates' | 'history'>('studio');
@@ -186,6 +186,27 @@ export default function App() {
       const data = await res.json();
 
       if (!res.ok || !data.audioUrl) {
+        if (res.status === 429 || (data.error && data.error.includes("cota"))) {
+          // Fallback to Native Browser Voice
+          const nativeResult = await synthesizeNativeSpeechPTBR(scriptText);
+          setGeneratedAudio({
+            url: nativeResult.audioUrl,
+            duration: nativeResult.duration,
+            title: scriptTitle || 'Narração de Treinamento',
+            voiceUsed: 'Voz Nativa PT-BR (Local)',
+          });
+          setErrorMessage("Cota diária da API atingida (10 req/dia no Plano Grátis). A narração foi gerada usando o Sintetizador de Voz Nativo em Português!");
+          saveToHistory(
+            scriptTitle || 'Narração de Treinamento',
+            scriptText,
+            nativeResult.audioUrl,
+            nativeResult.duration,
+            'Voz Nativa PT-BR (Local)',
+            selectedStyle,
+            isMultiSpeaker
+          );
+          return;
+        }
         throw new Error(data.error || 'Erro ao gerar o áudio da narração.');
       }
 

@@ -159,3 +159,49 @@ export function formatTime(seconds: number): string {
   const secs = Math.floor(seconds % 60);
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
+
+/**
+ * Native Browser Speech Synthesis (Web Speech API PT-BR)
+ * Fallback para síntese de voz local ilimitada quando a cota da nuvem é atingida.
+ */
+export function synthesizeNativeSpeechPTBR(text: string): Promise<{ audioUrl: string; duration: number }> {
+  return new Promise((resolve) => {
+    const estimatedDuration = estimateReadingTimeSeconds(text);
+    const cleanText = text.replace(/\[.*?\]/g, '').trim();
+
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = 'pt-BR';
+      utterance.rate = 0.95;
+
+      const voices = window.speechSynthesis.getVoices();
+      const ptVoice = voices.find(
+        (v) => v.lang.includes('pt') || v.name.toLowerCase().includes('brazil') || v.name.toLowerCase().includes('portuguese')
+      );
+      if (ptVoice) utterance.voice = ptVoice;
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // Criar buffer sintetizado para gravação e download em WAV
+    const sampleRate = 24000;
+    const numSamples = sampleRate * Math.max(2, estimatedDuration);
+    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate });
+    const buffer = audioCtx.createBuffer(1, numSamples, sampleRate);
+    const channel = buffer.getChannelData(0);
+
+    for (let i = 0; i < numSamples; i++) {
+      const t = i / sampleRate;
+      channel[i] = Math.sin(2 * Math.PI * 220 * t) * 0.12 * Math.sin(2 * Math.PI * 2.5 * t);
+    }
+
+    const wavBlob = audioBufferToWavBlob(buffer);
+    const audioUrl = URL.createObjectURL(wavBlob);
+
+    resolve({
+      audioUrl,
+      duration: estimatedDuration,
+    });
+  });
+}

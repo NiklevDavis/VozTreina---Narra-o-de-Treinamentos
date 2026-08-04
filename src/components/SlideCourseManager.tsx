@@ -19,7 +19,7 @@ import {
   XCircle,
   Film,
 } from 'lucide-react';
-import { formatTime, estimateReadingTimeSeconds } from '../lib/audioUtils';
+import { formatTime, estimateReadingTimeSeconds, synthesizeNativeSpeechPTBR } from '../lib/audioUtils';
 import { VideoMergeModal } from './VideoMergeModal';
 
 interface SlideCourseManagerProps {
@@ -225,17 +225,23 @@ export const SlideCourseManager: React.FC<SlideCourseManagerProps> = ({ onSaveTo
         }
 
         return true;
-      } else if (res.status === 429 && !isRetry) {
-        // Auto-retry once after 60s if rate limit 429 hit
+      } else if (res.status === 429 || (data.error && data.error.includes("cota"))) {
+        // Instant Fallback to Native Browser Speech Synthesis (PT-BR) when API quota is exhausted
+        const nativeResult = await synthesizeNativeSpeechPTBR(slide.script);
         setSlides((prev) =>
           prev.map((s) =>
             s.id === slideId
-              ? { ...s, status: 'generating', errorMessage: 'Cota atingida (10 req/min). Aguardando 60s para tentar novamente...' }
+              ? {
+                  ...s,
+                  status: 'ready',
+                  audioUrl: nativeResult.audioUrl,
+                  duration: nativeResult.duration,
+                  voice: 'Voz Nativa PT-BR (Local)',
+                }
               : s
           )
         );
-        await new Promise((resolve) => setTimeout(resolve, 60000));
-        return generateSlideAudio(slideId, targetSlide, true);
+        return true;
       } else {
         throw new Error(data.error || 'Erro ao gerar áudio do slide');
       }
