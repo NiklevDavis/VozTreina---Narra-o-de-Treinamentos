@@ -472,7 +472,8 @@ export const SlideCourseManager: React.FC<SlideCourseManagerProps> = ({ onSaveTo
               </div>
             )}
           </div>
-        ))}
+        );
+      })}
       </div>
 
       {/* Add Slide Button */}
