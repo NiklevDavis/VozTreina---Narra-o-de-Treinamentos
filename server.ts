@@ -241,11 +241,16 @@ async function synthesizeChatterboxPTBR(
   voice = "chatterbox_ptbr_f",
   pacing = "normal"
 ): Promise<{ audioUrl: string; duration: number; voiceUsed: string }> {
+  const hfToken = process.env.HF_TOKEN || process.env.HUGGINGFACE_TOKEN || process.env.HF_ACCESS_TOKEN;
+
   if (!chatterboxClient) {
     console.log("⚡ Conectando ao modelo Chatterbox Multilingual PT-BR (Resemble AI)...");
     const gradioPath = path.join(process.cwd(), "node_modules", "@gradio", "client", "dist", "index.js");
     const { Client } = await import("file:///" + gradioPath.replace(/\\/g, "/"));
-    chatterboxClient = await Client.connect("ResembleAI/Chatterbox-Multilingual-TTS-pt-br");
+    
+    chatterboxClient = await Client.connect("ResembleAI/Chatterbox-Multilingual-TTS-pt-br", {
+      hf_token: hfToken ? (hfToken.startsWith("hf_") ? hfToken : `hf_${hfToken}`) as any : undefined,
+    });
     console.log("✅ Conectado ao Chatterbox Multilingual PT-BR com sucesso!");
   }
 
@@ -418,7 +423,28 @@ app.post("/api/tts/generate", async (req, res) => {
         });
       } catch (chatterErr: any) {
         console.error("Chatterbox Error:", chatterErr);
-        return res.status(500).json({ error: "Erro ao sintetizar áudio com Chatterbox Multilingual PT-BR: " + chatterErr.message });
+        const errMsg = chatterErr.message || "";
+        
+        // Auto-fallback to local Razo / Kokoro when Hugging Face ZeroGPU quota is exceeded
+        if (errMsg.includes("ZeroGPU quota") || errMsg.includes("exceeded your ZeroGPU")) {
+          console.warn("⚠️ Cota ZeroGPU do Chatterbox excedida no Hugging Face. Executando fallback automático para o motor local Razo (Piper TTS PT-BR)...");
+          try {
+            const fallbackResult = await synthesizeRazo(text, voice, pacing);
+            return res.json({
+              audioUrl: fallbackResult.audioUrl,
+              duration: fallbackResult.duration,
+              sampleRate: 22050,
+              format: "wav",
+              voiceUsed: `${fallbackResult.voiceUsed} (Fallback automático por cota ZeroGPU)`,
+            });
+          } catch (fbErr: any) {
+            console.error("Erro no fallback Razo:", fbErr);
+          }
+        }
+
+        return res.status(429).json({ 
+          error: "Cota de GPU gratuita do Chatterbox excedida no Hugging Face. Adicione seu HF_TOKEN no arquivo .env ou utilize o motor 'Razo (Piper TTS PT-BR)' ou 'Kokoro-82M', que rodam 100% offline em CPU local sem cotas!" 
+        });
       }
     }
 
