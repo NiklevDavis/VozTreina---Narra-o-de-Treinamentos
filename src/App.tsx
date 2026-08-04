@@ -84,32 +84,20 @@ export default function App() {
     reader.readAsText(file);
   };
 
-  // History State
-  const [history, setHistory] = useState<AudioHistoryItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('voztreina_history');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  // History State backed by SQLite Database
+  const [history, setHistory] = useState<AudioHistoryItem[]>([]);
 
+  // Fetch initial history from SQLite
   useEffect(() => {
-    try {
-      localStorage.setItem('voztreina_history', JSON.stringify(history));
-    } catch (e) {
-      console.warn("localStorage quota exceeded, saving lighter history items", e);
-      try {
-        // Fallback: save only the latest 2 history items to avoid QuotaExceededError
-        const trimmedHistory = history.slice(0, 2);
-        localStorage.setItem('voztreina_history', JSON.stringify(trimmedHistory));
-      } catch (innerErr) {
-        console.warn("Could not save history to localStorage", innerErr);
-      }
-    }
-  }, [history]);
+    fetch('/api/db/history')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) setHistory(data);
+      })
+      .catch((err) => console.warn('Could not load history from SQLite db:', err));
+  }, []);
 
-  const saveToHistory = (
+  const saveToHistory = async (
     title: string,
     text: string,
     audioUrl: string,
@@ -135,15 +123,36 @@ export default function App() {
         minute: '2-digit',
       }),
     };
+
     setHistory((prev) => [newItem, ...prev]);
+
+    try {
+      await fetch('/api/db/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newItem),
+      });
+    } catch (err) {
+      console.warn('Error persisting history item to SQLite:', err);
+    }
   };
 
-  const handleClearHistory = () => {
+  const handleClearHistory = async () => {
     setHistory([]);
+    try {
+      await fetch('/api/db/history', { method: 'DELETE' });
+    } catch (err) {
+      console.warn('Error clearing history in SQLite:', err);
+    }
   };
 
-  const handleRemoveHistoryItem = (id: string) => {
+  const handleRemoveHistoryItem = async (id: string) => {
     setHistory((prev) => prev.filter((item) => item.id !== id));
+    try {
+      await fetch(`/api/db/history/${id}`, { method: 'DELETE' });
+    } catch (err) {
+      console.warn('Error deleting history item in SQLite:', err);
+    }
   };
 
   // Quick Directive Insertion helper

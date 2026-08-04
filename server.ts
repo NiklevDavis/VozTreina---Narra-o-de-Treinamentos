@@ -3,8 +3,21 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI, Modality } from "@google/genai";
+import {
+  initDb,
+  getHistory,
+  addHistoryItem,
+  deleteHistoryItem,
+  clearHistory,
+  getCourses,
+  saveCourse,
+  deleteCourse,
+} from "./db";
 
 dotenv.config();
+
+// Inicializar banco de dados SQLite local
+initDb();
 
 const app = express();
 const PORT = 3000;
@@ -261,6 +274,80 @@ Texto:
   } catch (err: any) {
     console.error("Error generating subtitles:", err);
     return res.status(500).json({ error: "Erro ao gerar legendas." });
+  }
+});
+
+// Database API Endpoints (SQLite Persistence)
+
+// GET History
+app.get("/api/db/history", (req, res) => {
+  try {
+    const history = getHistory();
+    return res.json(history);
+  } catch (err: any) {
+    return res.status(500).json({ error: "Erro ao buscar histórico no banco." });
+  }
+});
+
+// POST History Item
+app.post("/api/db/history", (req, res) => {
+  try {
+    const id = addHistoryItem(req.body);
+    return res.json({ status: "ok", id });
+  } catch (err: any) {
+    console.error("Error adding history item:", err);
+    return res.status(500).json({ error: "Erro ao salvar histórico no banco." });
+  }
+});
+
+// DELETE Single History Item
+app.delete("/api/db/history/:id", (req, res) => {
+  try {
+    deleteHistoryItem(req.params.id);
+    return res.json({ status: "ok" });
+  } catch (err: any) {
+    return res.status(500).json({ error: "Erro ao remover item do histórico." });
+  }
+});
+
+// DELETE All History
+app.delete("/api/db/history", (req, res) => {
+  try {
+    clearHistory();
+    return res.json({ status: "ok" });
+  } catch (err: any) {
+    return res.status(500).json({ error: "Erro ao limpar histórico no banco." });
+  }
+});
+
+// GET Courses & Slides
+app.get("/api/db/courses", (req, res) => {
+  try {
+    const courses = getCourses();
+    return res.json(courses);
+  } catch (err: any) {
+    return res.status(500).json({ error: "Erro ao buscar cursos no banco." });
+  }
+});
+
+// POST Save Course & Slides
+app.post("/api/db/courses", (req, res) => {
+  try {
+    saveCourse(req.body);
+    return res.json({ status: "ok" });
+  } catch (err: any) {
+    console.error("Error saving course:", err);
+    return res.status(500).json({ error: "Erro ao salvar curso no banco." });
+  }
+});
+
+// DELETE Course
+app.delete("/api/db/courses/:id", (req, res) => {
+  try {
+    deleteCourse(req.params.id);
+    return res.json({ status: "ok" });
+  } catch (err: any) {
+    return res.status(500).json({ error: "Erro ao excluir curso no banco." });
   }
 });
 

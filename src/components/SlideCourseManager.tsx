@@ -27,6 +27,7 @@ interface SlideCourseManagerProps {
 }
 
 export const SlideCourseManager: React.FC<SlideCourseManagerProps> = ({ onSaveToHistory }) => {
+  const [courseId] = useState('main-course-1');
   const [courseTitle, setCourseTitle] = useState('Curso: Integração e Boas Práticas Corporativas');
   const [globalVoice, setGlobalVoice] = useState('Kore');
   const [globalStyle, setGlobalStyle] = useState('didatico');
@@ -55,6 +56,45 @@ export const SlideCourseManager: React.FC<SlideCourseManagerProps> = ({ onSaveTo
       status: 'idle',
     },
   ]);
+
+  // Load saved course from SQLite on mount
+  React.useEffect(() => {
+    fetch('/api/db/courses')
+      .then((res) => res.json())
+      .then((courses) => {
+        if (Array.isArray(courses) && courses.length > 0) {
+          const c = courses[0];
+          if (c.title) setCourseTitle(c.title);
+          if (c.globalVoice) setGlobalVoice(c.globalVoice);
+          if (c.globalStyle) setGlobalStyle(c.globalStyle);
+          if (c.globalPacing) setGlobalPacing(c.globalPacing as NarrationPacing);
+          if (Array.isArray(c.slides) && c.slides.length > 0) {
+            setSlides(c.slides);
+          }
+        }
+      })
+      .catch((err) => console.warn('Could not load course from SQLite:', err));
+  }, []);
+
+  // Auto-save course to SQLite
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      fetch('/api/db/courses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: courseId,
+          title: courseTitle,
+          globalVoice,
+          globalStyle,
+          globalPacing,
+          slides,
+        }),
+      }).catch((err) => console.warn('Error auto-saving course to SQLite:', err));
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [courseId, courseTitle, globalVoice, globalStyle, globalPacing, slides]);
 
   const [currentlyPlayingSlideId, setCurrentlyPlayingSlideId] = useState<string | null>(null);
   const [isGeneratingBatch, setIsGeneratingBatch] = useState(false);
