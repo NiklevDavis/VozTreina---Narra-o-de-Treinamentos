@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI, Modality } from "@google/genai";
@@ -134,32 +135,57 @@ let kokoroInstance: any = null;
 
 /**
  * Synthesizes speech using Kokoro-82M ONNX model (hexgrad/Kokoro-82M)
+ * Exclusively using Brazilian Portuguese official voices (pf_dora, pm_alex, pm_santa)
  */
 async function synthesizeKokoro82M(
   text: string,
-  voice = "af_heart",
+  voice = "pf_dora",
   pacing = "normal"
 ): Promise<{ audioUrl: string; duration: number; voiceUsed: string }> {
   if (!kokoroInstance) {
-    console.log("⚡ Inicializando modelo Kokoro-82M ONNX...");
+    console.log("⚡ Inicializando modelo Kokoro-82M ONNX (Vozes PT-BR)...");
     const kokoroModulePath = path.join(process.cwd(), "node_modules", "kokoro-js", "dist", "kokoro.js");
     const { KokoroTTS } = await import("file:///" + kokoroModulePath.replace(/\\/g, "/"));
     kokoroInstance = await KokoroTTS.from_pretrained("onnx-community/Kokoro-82M-v1.0-ONNX", {
       dtype: "q8",
     });
-    console.log("✅ Modelo Kokoro-82M pronto para síntese!");
+
+    // Override voice validation to accept official Brazilian Portuguese Kokoro voices
+    const origValidate = kokoroInstance._validate_voice.bind(kokoroInstance);
+    kokoroInstance._validate_voice = function(voiceName: string) {
+      if (["pf_dora", "pm_alex", "pm_santa"].includes(voiceName)) {
+        return voiceName;
+      }
+      return origValidate(voiceName);
+    };
+
+    // Load local PT-BR voice binaries (.bin)
+    const ptbrVoices = ["pf_dora", "pm_alex", "pm_santa"];
+    for (const vId of ptbrVoices) {
+      const binPath = path.join(process.cwd(), "node_modules", "kokoro-js", "voices", `${vId}.bin`);
+      if (fs.existsSync(binPath)) {
+        const buf = fs.readFileSync(binPath);
+        const floatArr = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
+        kokoroInstance.voices[vId] = floatArr;
+      }
+    }
+
+    console.log("✅ Modelo Kokoro-82M pronto com as vozes oficiais PT-BR (Dora, Alex, Santa)!");
   }
 
   let speed = 1.0;
   if (pacing === "pausado") speed = 0.88;
   else if (pacing === "rapido") speed = 1.15;
 
-  let kokoroVoice = voice;
-  if (voice === "Kore" || voice.includes("Neural2-A")) kokoroVoice = "af_heart";
-  else if (voice === "Zephyr") kokoroVoice = "af_bella";
-  else if (voice === "Nicole") kokoroVoice = "af_nicole";
-  else if (voice === "Puck" || voice === "Charon") kokoroVoice = "am_adam";
-  else if (voice === "Fenrir") kokoroVoice = "am_michael";
+  // Strict PT-BR Voice Selection
+  let kokoroVoice = "pf_dora";
+  if (voice === "pm_alex" || voice === "Alex" || voice === "Puck" || voice === "Charon") {
+    kokoroVoice = "pm_alex";
+  } else if (voice === "pm_santa" || voice === "Santa" || voice === "Fenrir") {
+    kokoroVoice = "pm_santa";
+  } else {
+    kokoroVoice = "pf_dora"; // Default: Dora (pf_dora - PT-BR Female)
+  }
 
   const audio = await kokoroInstance.generate(text.trim(), {
     voice: kokoroVoice,
@@ -173,10 +199,16 @@ async function synthesizeKokoro82M(
 
   const durationSeconds = +(wavBuffer.length / (24000 * 2)).toFixed(1);
 
+  const voiceLabels: Record<string, string> = {
+    pf_dora: "Dora (pf_dora - PT-BR)",
+    pm_alex: "Alex (pm_alex - PT-BR)",
+    pm_santa: "Santa (pm_santa - PT-BR)",
+  };
+
   return {
     audioUrl: audioDataUrl,
     duration: durationSeconds,
-    voiceUsed: `${kokoroVoice} (Kokoro-82M)`,
+    voiceUsed: `${voiceLabels[kokoroVoice] || kokoroVoice} (Kokoro-82M)`,
   };
 }
 
