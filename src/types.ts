@@ -1,6 +1,6 @@
 export type NarrationPacing = 'pausado' | 'normal' | 'rapido' | 'expressivo';
 
-export type TTSEngine = 'gemini-flash' | 'cloud-neural2' | 'browser-native';
+export type TTSEngine = 'kokoro-82m' | 'gemini-flash' | 'cloud-neural2' | 'browser-native';
 
 export interface TTSEngineOption {
   id: TTSEngine;
@@ -10,6 +10,12 @@ export interface TTSEngineOption {
 }
 
 export const TTS_ENGINE_OPTIONS: TTSEngineOption[] = [
+  {
+    id: 'kokoro-82m',
+    label: 'Kokoro-82M (Hugging Face)',
+    badge: 'Open-Weight 82M',
+    description: 'Modelo de fala ultra-humano e natural da comunidade Hugging Face (hexgrad/Kokoro-82M).',
+  },
   {
     id: 'gemini-flash',
     label: 'Gemini 3.1 Flash TTS (Padrão)',
@@ -27,6 +33,49 @@ export const TTS_ENGINE_OPTIONS: TTSEngineOption[] = [
     label: 'Voz Nativa do Navegador (PT-BR)',
     badge: 'Offline Local',
     description: 'Sintetizador local no computador, sem uso de internet ou cotas de API.',
+  },
+];
+
+export const KOKORO_VOICES: VoiceOption[] = [
+  {
+    id: 'af_heart',
+    name: 'Heart (Kokoro-82M)',
+    gender: 'Feminino',
+    title: 'Voz Ultra-Realista & Expressiva',
+    description: 'Tom extremamente humano, natural e articulado com dicção impecável.',
+    idealFor: 'Vídeos Institucionais, Apresentações Executivas, Onboarding',
+  },
+  {
+    id: 'af_bella',
+    name: 'Bella (Kokoro-82M)',
+    gender: 'Feminino',
+    title: 'Voz Didática & Suave',
+    description: 'Cadência serena e clara, ideal para cursos longos.',
+    idealFor: 'E-learning, Cursos Online, Tutoriais Passo a Passo',
+  },
+  {
+    id: 'af_nicole',
+    name: 'Nicole (Kokoro-82M)',
+    gender: 'Feminino',
+    title: 'Voz Profissional & Direta',
+    description: 'Tom executivo corporativo limpo.',
+    idealFor: 'Treinamentos Internos, Comunicados, Compliance',
+  },
+  {
+    id: 'am_adam',
+    name: 'Adam (Kokoro-82M)',
+    gender: 'Masculino',
+    title: 'Voz Corporativa & Firme',
+    description: 'Tom masculino seguro, motivacional e grave.',
+    idealFor: 'Liderança, Pitchs, Vendas, Segurança do Trabalho',
+  },
+  {
+    id: 'am_michael',
+    name: 'Michael (Kokoro-82M)',
+    gender: 'Masculino',
+    title: 'Voz Técnica & Instrutiva',
+    description: 'Dicção clara e objetiva para procedimentos.',
+    idealFor: 'TI, Sistemas, Manuais Técnicos',
   },
 ];
 

@@ -1,18 +1,22 @@
 import React from 'react';
-import { GEMINI_VOICES, VoiceOption } from '../types';
+import { GEMINI_VOICES, KOKORO_VOICES, VoiceOption, TTSEngine } from '../types';
 import { UserCheck, Sparkles, Check } from 'lucide-react';
 
 interface VoiceSelectorCardProps {
   selectedVoice: string;
   onSelectVoice: (voiceId: string) => void;
   label?: string;
+  selectedEngine?: TTSEngine;
 }
 
 export const VoiceSelectorCard: React.FC<VoiceSelectorCardProps> = ({
   selectedVoice,
   onSelectVoice,
   label = "Selecione a Voz do Locutor",
+  selectedEngine = "gemini-flash",
 }) => {
+  const voicesList = selectedEngine === "kokoro-82m" ? KOKORO_VOICES : GEMINI_VOICES;
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -20,11 +24,13 @@ export const VoiceSelectorCard: React.FC<VoiceSelectorCardProps> = ({
           <UserCheck className="w-4 h-4 text-indigo-400" />
           {label}
         </label>
-        <span className="text-xs text-slate-500">5 Vozes Gemini Disponíveis</span>
+        <span className="text-xs text-slate-500">
+          {voicesList.length} Vozes {selectedEngine === "kokoro-82m" ? "Kokoro-82M" : "Gemini"} Disponíveis
+        </span>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
-        {GEMINI_VOICES.map((voice) => {
+        {voicesList.map((voice) => {
           const isSelected = selectedVoice === voice.id;
           return (
             <button

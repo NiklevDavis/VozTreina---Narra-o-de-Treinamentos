@@ -130,6 +130,56 @@ async function synthesizeGoogleCloudTTS(
   };
 }
 
+let kokoroInstance: any = null;
+
+/**
+ * Synthesizes speech using Kokoro-82M ONNX model (hexgrad/Kokoro-82M)
+ */
+async function synthesizeKokoro82M(
+  text: string,
+  voice = "af_heart",
+  pacing = "normal"
+): Promise<{ audioUrl: string; duration: number; voiceUsed: string }> {
+  if (!kokoroInstance) {
+    console.log("⚡ Inicializando modelo Kokoro-82M ONNX...");
+    const kokoroModulePath = path.join(process.cwd(), "node_modules", "kokoro-js", "dist", "kokoro.js");
+    const { KokoroTTS } = await import("file:///" + kokoroModulePath.replace(/\\/g, "/"));
+    kokoroInstance = await KokoroTTS.from_pretrained("onnx-community/Kokoro-82M-v1.0-ONNX", {
+      dtype: "q8",
+    });
+    console.log("✅ Modelo Kokoro-82M pronto para síntese!");
+  }
+
+  let speed = 1.0;
+  if (pacing === "pausado") speed = 0.88;
+  else if (pacing === "rapido") speed = 1.15;
+
+  let kokoroVoice = voice;
+  if (voice === "Kore" || voice.includes("Neural2-A")) kokoroVoice = "af_heart";
+  else if (voice === "Zephyr") kokoroVoice = "af_bella";
+  else if (voice === "Nicole") kokoroVoice = "af_nicole";
+  else if (voice === "Puck" || voice === "Charon") kokoroVoice = "am_adam";
+  else if (voice === "Fenrir") kokoroVoice = "am_michael";
+
+  const audio = await kokoroInstance.generate(text.trim(), {
+    voice: kokoroVoice,
+    speed,
+  });
+
+  const wavArrayBuffer = audio.toWav();
+  const wavBuffer = Buffer.from(wavArrayBuffer);
+  const base64Wav = wavBuffer.toString("base64");
+  const audioDataUrl = `data:audio/wav;base64,${base64Wav}`;
+
+  const durationSeconds = +(wavBuffer.length / (24000 * 2)).toFixed(1);
+
+  return {
+    audioUrl: audioDataUrl,
+    duration: durationSeconds,
+    voiceUsed: `${kokoroVoice} (Kokoro-82M)`,
+  };
+}
+
 // Single / Multi-speaker Narration Generator Endpoint
 app.post("/api/tts/generate", async (req, res) => {
   try {
@@ -146,6 +196,23 @@ app.post("/api/tts/generate", async (req, res) => {
 
     if (!text || typeof text !== "string" || !text.trim()) {
       return res.status(400).json({ error: "Texto da narração é necessário." });
+    }
+
+    // Explicit Kokoro-82M selection
+    if (!isMultiSpeaker && engine === "kokoro-82m") {
+      try {
+        const kokoroResult = await synthesizeKokoro82M(text, voice, pacing);
+        return res.json({
+          audioUrl: kokoroResult.audioUrl,
+          duration: kokoroResult.duration,
+          sampleRate: 24000,
+          format: "wav",
+          voiceUsed: kokoroResult.voiceUsed,
+        });
+      } catch (kokoroErr: any) {
+        console.error("Kokoro-82M Error:", kokoroErr);
+        return res.status(500).json({ error: "Erro ao sintetizar áudio com Kokoro-82M: " + kokoroErr.message });
+      }
     }
 
     // Explicit Google Cloud Text-to-Speech (Neural2 PT-BR) selection

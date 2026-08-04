@@ -344,6 +344,7 @@ export default function App() {
                 selectedVoice={singleVoice}
                 onSelectVoice={setSingleVoice}
                 label="Selecione a Voz do Narrador"
+                selectedEngine={selectedEngine}
               />
             ) : (
               <div className="bg-[#14161B] border border-white/5 rounded-2xl p-5 shadow-xl space-y-4">
