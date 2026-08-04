@@ -163,6 +163,30 @@ export const SlideCourseManager: React.FC<SlideCourseManagerProps> = ({ onSaveTo
     ]);
   };
 
+  // Clear audio for a single slide
+  const clearSlideAudio = (id: string) => {
+    setSlides((prev) =>
+      prev.map((s) =>
+        s.id === id
+          ? { ...s, audioUrl: undefined, duration: undefined, status: 'idle', errorMessage: undefined }
+          : s
+      )
+    );
+  };
+
+  // Clear audio for all slides in the module
+  const clearAllSlidesAudio = () => {
+    setSlides((prev) =>
+      prev.map((s) => ({
+        ...s,
+        audioUrl: undefined,
+        duration: undefined,
+        status: 'idle',
+        errorMessage: undefined,
+      }))
+    );
+  };
+
   // Remove slide
   const removeSlide = (id: string) => {
     setSlides(slides.filter((s) => s.id !== id).map((s, idx) => ({ ...s, slideNumber: idx + 1 })));
@@ -384,6 +408,17 @@ export const SlideCourseManager: React.FC<SlideCourseManagerProps> = ({ onSaveTo
             <Video className="w-4 h-4 text-emerald-200" />
             <span>Exportar Vídeo do Módulo (Merge)</span>
           </button>
+
+          {slides.some((s) => s.audioUrl || s.status === 'ready') && (
+            <button
+              onClick={clearAllSlidesAudio}
+              className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 font-semibold text-xs border border-white/10 flex items-center space-x-1.5 transition-all"
+              title="Limpar todos os áudios gerados neste módulo"
+            >
+              <Trash2 className="w-4 h-4 text-rose-400" />
+              <span>Limpar Áudios</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -434,10 +469,19 @@ export const SlideCourseManager: React.FC<SlideCourseManagerProps> = ({ onSaveTo
                   )}
 
                   {slide.status === 'ready' && (
-                    <span className="flex items-center space-x-1 text-xs text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Pronto ({formatTime(slide.duration || 0)})</span>
-                    </span>
+                    <div className="flex items-center space-x-1">
+                      <span className="flex items-center space-x-1 text-xs text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Pronto ({formatTime(slide.duration || 0)})</span>
+                      </span>
+                      <button
+                        onClick={() => clearSlideAudio(slide.id)}
+                        className="p-1 text-slate-500 hover:text-rose-400 hover:bg-white/5 rounded-md transition-colors"
+                        title="Excluir áudio deste slide"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   )}
 
                   {slide.status === 'error' && (
