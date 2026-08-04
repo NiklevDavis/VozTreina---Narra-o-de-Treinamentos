@@ -68,7 +68,69 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", engine: "gemini-3.1-flash-tts-preview" });
 });
 
-// TTS Generation Endpoint
+/**
+ * Synthesizes speech using Google Cloud Text-to-Speech REST API (Neural2 / WaveNet PT-BR).
+ * Includes 4 MILLION characters per month 100% FREE!
+ */
+async function synthesizeGoogleCloudTTS(
+  text: string,
+  voice: string,
+  pacing: string = "normal"
+): Promise<{ audioUrl: string; duration: number; voiceUsed: string }> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
+    throw new Error("Chave de API do Gemini/Google Cloud não configurada no .env.");
+  }
+
+  let gcpVoice = "pt-BR-Neural2-A";
+  if (voice === "Fenrir" || voice.includes("Neural2-B")) gcpVoice = "pt-BR-Neural2-B";
+  else if (voice === "Zephyr" || voice.includes("Neural2-C")) gcpVoice = "pt-BR-Neural2-C";
+  else if (voice === "Charon" || voice.includes("Wavenet-B")) gcpVoice = "pt-BR-Wavenet-B";
+  else if (voice === "Puck" || voice.includes("Wavenet-C")) gcpVoice = "pt-BR-Wavenet-C";
+  else if (voice === "Kore" || voice.includes("Neural2-A")) gcpVoice = "pt-BR-Neural2-A";
+
+  let speakingRate = 1.0;
+  if (pacing === "pausado") speakingRate = 0.88;
+  else if (pacing === "rapido") speakingRate = 1.15;
+
+  const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      input: { text: text.trim() },
+      voice: {
+        languageCode: "pt-BR",
+        name: gcpVoice,
+      },
+      audioConfig: {
+        audioEncoding: "LINEAR16",
+        speakingRate,
+        sampleRateHertz: 24000,
+      },
+    }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok || !data.audioContent) {
+    throw new Error(data.error?.message || "Google Cloud TTS indisponível.");
+  }
+
+  // Google Cloud TTS returns full LINEAR16 WAV base64
+  const audioDataUrl = `data:audio/wav;base64,${data.audioContent}`;
+  const pcmBuffer = Buffer.from(data.audioContent, "base64");
+  const durationSeconds = +(pcmBuffer.length / (24000 * 2)).toFixed(1);
+
+  return {
+    audioUrl: audioDataUrl,
+    duration: durationSeconds,
+    voiceUsed: `${voice} (Google Cloud Neural2 PT-BR)`,
+  };
+}
+
+// Single / Multi-speaker Narration Generator Endpoint
 app.post("/api/tts/generate", async (req, res) => {
   try {
     const {
@@ -79,18 +141,34 @@ app.post("/api/tts/generate", async (req, res) => {
       isMultiSpeaker = false,
       speaker1 = { name: "Instrutor", voice: "Kore" },
       speaker2 = { name: "Aluno", voice: "Puck" },
-      speedMultiplier = 1.0,
+      engine = "auto",
     } = req.body;
 
     if (!text || typeof text !== "string" || !text.trim()) {
-      return res.status(400).json({ error: "O texto para narração é obrigatório." });
+      return res.status(400).json({ error: "Texto da narração é necessário." });
+    }
+
+    // Try Google Cloud Text-to-Speech (Neural2 PT-BR) first for single speaker (4M free chars/month)
+    if (!isMultiSpeaker && (engine === "auto" || engine === "cloud-neural2")) {
+      try {
+        const cloudResult = await synthesizeGoogleCloudTTS(text, voice, pacing);
+        return res.json({
+          audioUrl: cloudResult.audioUrl,
+          duration: cloudResult.duration,
+          sampleRate: 24000,
+          format: "wav",
+          voiceUsed: cloudResult.voiceUsed,
+        });
+      } catch (gcpErr: any) {
+        console.warn("Google Cloud TTS fallback to Gemini Flash TTS:", gcpErr.message);
+      }
     }
 
     let pacingInstruction = "";
     if (pacing === "pausado") {
-      pacingInstruction = " RITMO DA FALA: Fale em cadência pausada, lenta e muito bem articulada, deixando intervalos e pausas claras de assimilação entre as frases.";
+      pacingInstruction = " RITMO DA FALA: Mantenha ritmo pausado, sereno e reflexivo, com pausas respiratórias generosas entre frases.";
     } else if (pacing === "rapido") {
-      pacingInstruction = " RITMO DA FALA: Fale em cadência dinâmica, ágil e acelerada, sem pausas longas ou hesitações, mantendo dicção perfeita.";
+      pacingInstruction = " RITMO DA FALA: Mantenha ritmo ágil, dinâmico e direto ao ponto, com pausas breves.";
     } else if (pacing === "expressivo") {
       pacingInstruction = " RITMO DA FALA: Fale em cadência expressiva e variável, acelerando o ritmo em trechos empolgantes e desacelerando para dar ênfase a conceitos importantes.";
     } else {

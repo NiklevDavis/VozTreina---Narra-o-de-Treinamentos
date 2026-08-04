@@ -39,7 +39,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="hidden lg:flex items-center space-x-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full text-xs">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             <span className="text-slate-400 font-medium">Motor TTS:</span>
-            <span className="text-indigo-400 font-mono font-semibold">gemini-3.1-flash-tts-preview</span>
+            <span className="text-emerald-400 font-mono font-semibold">Google Cloud Neural2 (4M grátis/mês)</span>
           </div>
 
           {/* Navigation Tabs */}
