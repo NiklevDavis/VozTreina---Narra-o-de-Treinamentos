@@ -133,8 +133,10 @@ export const SlideCourseManager: React.FC<SlideCourseManagerProps> = ({ onSaveTo
     );
   };
 
-  // Generate Audio for a Single Slide
-  const generateSlideAudio = async (slideId: string, targetSlide?: ModuleSlide): Promise<boolean> => {
+  const [batchStatusMessage, setBatchStatusMessage] = useState<string | null>(null);
+
+  // Generate Audio for a Single Slide (with auto-retry for 429 rate limit)
+  const generateSlideAudio = async (slideId: string, targetSlide?: ModuleSlide, isRetry = false): Promise<boolean> => {
     const slide = targetSlide || slides.find((s) => s.id === slideId);
     if (!slide || !slide.script.trim()) return false;
 
@@ -183,6 +185,17 @@ export const SlideCourseManager: React.FC<SlideCourseManagerProps> = ({ onSaveTo
         }
 
         return true;
+      } else if (res.status === 429 && !isRetry) {
+        // Auto-retry once after 60s if rate limit 429 hit
+        setSlides((prev) =>
+          prev.map((s) =>
+            s.id === slideId
+              ? { ...s, status: 'generating', errorMessage: 'Cota atingida (10 req/min). Aguardando 60s para tentar novamente...' }
+              : s
+          )
+        );
+        await new Promise((resolve) => setTimeout(resolve, 60000));
+        return generateSlideAudio(slideId, targetSlide, true);
       } else {
         throw new Error(data.error || 'Erro ao gerar áudio do slide');
       }
@@ -197,20 +210,26 @@ export const SlideCourseManager: React.FC<SlideCourseManagerProps> = ({ onSaveTo
     }
   };
 
-  // Generate All Audio in Batch with rate limit pause
+  // Generate All Audio in Batch with mathematically safe rate-limit delay (6.5s)
   const generateAllSlidesAudio = async () => {
     setIsGeneratingBatch(true);
     const validSlides = slides.filter((s) => s.script.trim());
     
     for (let i = 0; i < validSlides.length; i++) {
       const slide = validSlides[i];
+      setBatchStatusMessage(`Gerando slide ${i + 1} de ${validSlides.length}...`);
+      
       await generateSlideAudio(slide.id, slide);
       
-      // 800ms pause between sequential batch TTS requests to prevent API rate limiting
+      // 6.5 second delay between sequential batch TTS requests (ensures max 9 requests/minute, avoiding 10 req/min limit)
       if (i < validSlides.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 800));
+        for (let countdown = 6; countdown > 0; countdown--) {
+          setBatchStatusMessage(`Slide ${i + 1}/${validSlides.length} concluído. Pausa anti-bloqueio (cota 10 req/min): ${countdown}s...`);
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
       }
     }
+    setBatchStatusMessage(null);
     setIsGeneratingBatch(false);
   };
 
@@ -280,8 +299,8 @@ export const SlideCourseManager: React.FC<SlideCourseManagerProps> = ({ onSaveTo
           >
             {isGeneratingBatch ? (
               <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Gerando Módulos em Lote...</span>
+                <RefreshCw className="w-4 h-4 animate-spin text-indigo-300" />
+                <span>{batchStatusMessage || 'Gerando Módulos em Lote...'}</span>
               </>
             ) : (
               <>
