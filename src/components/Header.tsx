@@ -1,16 +1,21 @@
 import React from 'react';
-import { Sparkles, Mic, Layers, BookOpen, History, Volume2 } from 'lucide-react';
+import { Sparkles, Mic, Layers, BookOpen, History, Volume2, Cpu } from 'lucide-react';
+import { TTSEngine, TTS_ENGINE_OPTIONS } from '../types';
 
 interface HeaderProps {
   activeTab: 'studio' | 'course' | 'templates' | 'history';
   setActiveTab: (tab: 'studio' | 'course' | 'templates' | 'history') => void;
   historyCount: number;
+  selectedEngine: TTSEngine;
+  setSelectedEngine: (engine: TTSEngine) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   activeTab,
   setActiveTab,
   historyCount,
+  selectedEngine,
+  setSelectedEngine,
 }) => {
   return (
     <header className="sticky top-0 z-40 bg-[#0F1115] border-b border-white/5 text-white shadow-xl">
@@ -35,11 +40,21 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Model Status Indicator */}
-          <div className="hidden lg:flex items-center space-x-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full text-xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span className="text-slate-400 font-medium">Motor TTS:</span>
-            <span className="text-emerald-400 font-mono font-semibold">Google Cloud Neural2 (4M grátis/mês)</span>
+          {/* Interactive Engine Selector Dropdown */}
+          <div className="flex items-center space-x-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl text-xs">
+            <Cpu className="w-4 h-4 text-indigo-400" />
+            <span className="text-slate-400 font-medium hidden md:inline">Motor TTS:</span>
+            <select
+              value={selectedEngine}
+              onChange={(e) => setSelectedEngine(e.target.value as TTSEngine)}
+              className="bg-[#0D0E12] border border-white/10 text-indigo-300 rounded-lg px-2 py-1 outline-none font-semibold cursor-pointer hover:border-indigo-500 transition-all text-xs"
+            >
+              {TTS_ENGINE_OPTIONS.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Navigation Tabs */}

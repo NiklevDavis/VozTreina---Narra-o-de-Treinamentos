@@ -141,15 +141,15 @@ app.post("/api/tts/generate", async (req, res) => {
       isMultiSpeaker = false,
       speaker1 = { name: "Instrutor", voice: "Kore" },
       speaker2 = { name: "Aluno", voice: "Puck" },
-      engine = "auto",
+      engine = "gemini-flash",
     } = req.body;
 
     if (!text || typeof text !== "string" || !text.trim()) {
       return res.status(400).json({ error: "Texto da narração é necessário." });
     }
 
-    // Try Google Cloud Text-to-Speech (Neural2 PT-BR) first for single speaker (4M free chars/month)
-    if (!isMultiSpeaker && (engine === "auto" || engine === "cloud-neural2")) {
+    // Explicit Google Cloud Text-to-Speech (Neural2 PT-BR) selection
+    if (!isMultiSpeaker && engine === "cloud-neural2") {
       try {
         const cloudResult = await synthesizeGoogleCloudTTS(text, voice, pacing);
         return res.json({
@@ -160,7 +160,7 @@ app.post("/api/tts/generate", async (req, res) => {
           voiceUsed: cloudResult.voiceUsed,
         });
       } catch (gcpErr: any) {
-        console.warn("Google Cloud TTS fallback to Gemini Flash TTS:", gcpErr.message);
+        console.warn("Google Cloud TTS error, falling back to Gemini Flash TTS:", gcpErr.message);
       }
     }
 

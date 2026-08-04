@@ -1,5 +1,35 @@
 export type NarrationPacing = 'pausado' | 'normal' | 'rapido' | 'expressivo';
 
+export type TTSEngine = 'gemini-flash' | 'cloud-neural2' | 'browser-native';
+
+export interface TTSEngineOption {
+  id: TTSEngine;
+  label: string;
+  badge: string;
+  description: string;
+}
+
+export const TTS_ENGINE_OPTIONS: TTSEngineOption[] = [
+  {
+    id: 'gemini-flash',
+    label: 'Gemini 3.1 Flash TTS (Padrão)',
+    badge: 'Padrão IA',
+    description: 'Áudio fluído, expressivo e de alta fidelidade com inteligência multimodal.',
+  },
+  {
+    id: 'cloud-neural2',
+    label: 'Google Cloud Neural2',
+    badge: '4M Grátis/mês',
+    description: 'Vozes neurais padrão de alta capacidade mensal.',
+  },
+  {
+    id: 'browser-native',
+    label: 'Voz Nativa do Navegador (PT-BR)',
+    badge: 'Offline Local',
+    description: 'Sintetizador local no computador, sem uso de internet ou cotas de API.',
+  },
+];
+
 export interface PacingOption {
   id: NarrationPacing;
   label: string;

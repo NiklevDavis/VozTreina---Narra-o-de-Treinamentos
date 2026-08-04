@@ -19,14 +19,16 @@ import {
   XCircle,
   Film,
 } from 'lucide-react';
+import { TTSEngine } from '../types';
 import { formatTime, estimateReadingTimeSeconds, synthesizeNativeSpeechPTBR } from '../lib/audioUtils';
 import { VideoMergeModal } from './VideoMergeModal';
 
 interface SlideCourseManagerProps {
   onSaveToHistory: (title: string, text: string, audioUrl: string, duration: number, voice: string, style: string) => void;
+  selectedEngine?: TTSEngine;
 }
 
-export const SlideCourseManager: React.FC<SlideCourseManagerProps> = ({ onSaveToHistory }) => {
+export const SlideCourseManager: React.FC<SlideCourseManagerProps> = ({ onSaveToHistory, selectedEngine = 'gemini-flash' }) => {
   const [courseId] = useState('main-course-1');
   const [courseTitle, setCourseTitle] = useState('Curso: Integração e Boas Práticas Corporativas');
   const [globalVoice, setGlobalVoice] = useState('Kore');
@@ -185,6 +187,24 @@ export const SlideCourseManager: React.FC<SlideCourseManagerProps> = ({ onSaveTo
     );
 
     try {
+      if (selectedEngine === 'browser-native') {
+        const nativeResult = await synthesizeNativeSpeechPTBR(slide.script);
+        setSlides((prev) =>
+          prev.map((s) =>
+            s.id === slideId
+              ? {
+                  ...s,
+                  status: 'ready',
+                  audioUrl: nativeResult.audioUrl,
+                  duration: nativeResult.duration,
+                  voice: 'Voz Nativa PT-BR (Local)',
+                }
+              : s
+          )
+        );
+        return true;
+      }
+
       const res = await fetch('/api/tts/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -193,6 +213,7 @@ export const SlideCourseManager: React.FC<SlideCourseManagerProps> = ({ onSaveTo
           voice: slide.voice || globalVoice,
           style: slide.style || globalStyle,
           pacing: slide.pacing || globalPacing,
+          engine: selectedEngine,
         }),
       });
 

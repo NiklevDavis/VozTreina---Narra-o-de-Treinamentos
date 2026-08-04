@@ -31,10 +31,14 @@ import {
   CheckCircle2,
   AlertCircle,
 } from 'lucide-react';
+import { TTSEngine } from './types';
 import { estimateReadingTimeSeconds, formatTime, synthesizeNativeSpeechPTBR } from './lib/audioUtils';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'studio' | 'course' | 'templates' | 'history'>('studio');
+
+  // TTS Engine State (Default: gemini-flash)
+  const [selectedEngine, setSelectedEngine] = useState<TTSEngine>('gemini-flash');
 
   // Main Studio Form State
   const [isMultiSpeaker, setIsMultiSpeaker] = useState(false);
@@ -167,6 +171,26 @@ export default function App() {
     setErrorMessage(null);
 
     try {
+      if (selectedEngine === 'browser-native') {
+        const nativeResult = await synthesizeNativeSpeechPTBR(scriptText);
+        setGeneratedAudio({
+          url: nativeResult.audioUrl,
+          duration: nativeResult.duration,
+          title: scriptTitle || 'Narração de Treinamento',
+          voiceUsed: 'Voz Nativa PT-BR (Local)',
+        });
+        saveToHistory(
+          scriptTitle || 'Narração de Treinamento',
+          scriptText,
+          nativeResult.audioUrl,
+          nativeResult.duration,
+          'Voz Nativa PT-BR (Local)',
+          selectedStyle,
+          isMultiSpeaker
+        );
+        return;
+      }
+
       const payload = {
         text: scriptText,
         voice: singleVoice,
@@ -175,6 +199,7 @@ export default function App() {
         isMultiSpeaker,
         speaker1,
         speaker2,
+        engine: selectedEngine,
       };
 
       const res = await fetch('/api/tts/generate', {
@@ -260,6 +285,8 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         historyCount={history.length}
+        selectedEngine={selectedEngine}
+        setSelectedEngine={setSelectedEngine}
       />
 
       {/* Main Container */}
@@ -553,7 +580,7 @@ export default function App() {
 
         {/* Tab 2: Multi-slide Course Manager */}
         {activeTab === 'course' && (
-          <SlideCourseManager onSaveToHistory={saveToHistory} />
+          <SlideCourseManager selectedEngine={selectedEngine} onSaveToHistory={saveToHistory} />
         )}
 
         {/* Tab 3: Template Library */}
