@@ -241,7 +241,9 @@ async function synthesizeChatterboxPTBR(
   voice = "chatterbox_ptbr_f",
   pacing = "normal"
 ): Promise<{ audioUrl: string; duration: number; voiceUsed: string }> {
-  const hfToken = process.env.HF_TOKEN || process.env.HUGGINGFACE_TOKEN || process.env.HF_ACCESS_TOKEN;
+  // Recarregar dotenv para capturar alterações recentes no arquivo .env
+  dotenv.config();
+  const hfToken = (process.env.HF_TOKEN || process.env.HUGGINGFACE_TOKEN || process.env.HF_ACCESS_TOKEN || "").trim();
 
   if (!chatterboxClient) {
     console.log("⚡ Conectando ao modelo Chatterbox Multilingual PT-BR (Resemble AI)...");
@@ -251,46 +253,51 @@ async function synthesizeChatterboxPTBR(
     chatterboxClient = await Client.connect("ResembleAI/Chatterbox-Multilingual-TTS-pt-br", {
       hf_token: hfToken ? (hfToken.startsWith("hf_") ? hfToken : `hf_${hfToken}`) as any : undefined,
     });
-    console.log("✅ Conectado ao Chatterbox Multilingual PT-BR com sucesso!");
+    console.log(`✅ Conectado ao Chatterbox Multilingual PT-BR com sucesso! (Token HF: ${hfToken ? "Ativo" : "Anônimo"})`);
   }
 
-  const defaultRefAudio = chatterboxClient.config.components.find((c: any) => c.id === 5)?.props?.value;
+  try {
+    const defaultRefAudio = chatterboxClient.config.components.find((c: any) => c.id === 5)?.props?.value;
 
-  let speedMultiplier = 0.5; // default CFG/Pace
-  if (pacing === "pausado") speedMultiplier = 0.4;
-  else if (pacing === "rapido") speedMultiplier = 0.6;
+    let speedMultiplier = 0.5; // default CFG/Pace
+    if (pacing === "pausado") speedMultiplier = 0.4;
+    else if (pacing === "rapido") speedMultiplier = 0.6;
 
-  const result = await chatterboxClient.predict("/generate_tts_audio", [
-    text.trim(),
-    defaultRefAudio,
-    0.5, // Exaggeration
-    0.8, // Temperature
-    0,   // Seed
-    speedMultiplier, // CFG/Pace
-  ]);
+    const result = await chatterboxClient.predict("/generate_tts_audio", [
+      text.trim(),
+      defaultRefAudio,
+      0.5, // Exaggeration
+      0.8, // Temperature
+      0,   // Seed
+      speedMultiplier, // CFG/Pace
+    ]);
 
-  const outputUrl = result.data?.[0]?.url;
-  if (!outputUrl) {
-    throw new Error("Resposta de áudio inválida do Chatterbox Multilingual PT-BR.");
+    const outputUrl = result.data?.[0]?.url;
+    if (!outputUrl) {
+      throw new Error("Resposta de áudio inválida do Chatterbox Multilingual PT-BR.");
+    }
+
+    const audioRes = await fetch(outputUrl);
+    if (!audioRes.ok) {
+      throw new Error(`Falha ao baixar áudio do Chatterbox: HTTP ${audioRes.status}`);
+    }
+
+    const audioBuf = await audioRes.arrayBuffer();
+    const base64Wav = Buffer.from(audioBuf).toString("base64");
+    const audioDataUrl = `data:audio/wav;base64,${base64Wav}`;
+    const durationSeconds = +(audioBuf.byteLength / (24000 * 2)).toFixed(1);
+
+    const voiceName = voice === "chatterbox_ptbr_m" ? "Resemble PT-BR Masculino" : "Resemble PT-BR Feminino";
+
+    return {
+      audioUrl: audioDataUrl,
+      duration: durationSeconds,
+      voiceUsed: `${voiceName} (Chatterbox Multilingual PT-BR)`,
+    };
+  } catch (err) {
+    chatterboxClient = null; // Reset client on error to force clean reconnection on retry
+    throw err;
   }
-
-  const audioRes = await fetch(outputUrl);
-  if (!audioRes.ok) {
-    throw new Error(`Falha ao baixar áudio do Chatterbox: HTTP ${audioRes.status}`);
-  }
-
-  const audioBuf = await audioRes.arrayBuffer();
-  const base64Wav = Buffer.from(audioBuf).toString("base64");
-  const audioDataUrl = `data:audio/wav;base64,${base64Wav}`;
-  const durationSeconds = +(audioBuf.byteLength / (24000 * 2)).toFixed(1);
-
-  const voiceName = voice === "chatterbox_ptbr_m" ? "Resemble PT-BR Masculino" : "Resemble PT-BR Feminino";
-
-  return {
-    audioUrl: audioDataUrl,
-    duration: durationSeconds,
-    voiceUsed: `${voiceName} (Chatterbox Multilingual PT-BR)`,
-  };
 }
 
 let razoSession: any = null;
