@@ -175,8 +175,10 @@ Narrar o seguinte texto de treinamento:
     let userErrorMessage = err.message || "Erro interno ao conectar com a API Gemini TTS.";
     if (userErrorMessage.includes("API key not valid") || userErrorMessage.includes("API_KEY_INVALID") || process.env.GEMINI_API_KEY === "MY_GEMINI_API_KEY") {
       userErrorMessage = "Sua chave de API do Gemini (GEMINI_API_KEY) no arquivo .env é inválida ou ainda não foi configurada. Obtenha uma chave gratuita em https://aistudio.google.com/app/apikey e cole no arquivo .env.";
+    } else if (userErrorMessage.includes("429") || userErrorMessage.includes("RESOURCE_EXHAUSTED") || userErrorMessage.includes("Quota exceeded") || userErrorMessage.includes("exceeded your current quota")) {
+      userErrorMessage = "Limite temporário de cota do plano gratuito do Gemini atingido (10 requisições/minuto para síntese de voz). Aguarde 1 minuto (60 segundos) e tente novamente.";
     }
-    return res.status(400).json({
+    return res.status(429).json({
       error: userErrorMessage,
     });
   }
