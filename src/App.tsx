@@ -98,7 +98,14 @@ export default function App() {
     try {
       localStorage.setItem('voztreina_history', JSON.stringify(history));
     } catch (e) {
-      console.warn("Could not save history to localStorage", e);
+      console.warn("localStorage quota exceeded, saving lighter history items", e);
+      try {
+        // Fallback: save only the latest 2 history items to avoid QuotaExceededError
+        const trimmedHistory = history.slice(0, 2);
+        localStorage.setItem('voztreina_history', JSON.stringify(trimmedHistory));
+      } catch (innerErr) {
+        console.warn("Could not save history to localStorage", innerErr);
+      }
     }
   }, [history]);
 

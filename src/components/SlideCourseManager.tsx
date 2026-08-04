@@ -134,9 +134,9 @@ export const SlideCourseManager: React.FC<SlideCourseManagerProps> = ({ onSaveTo
   };
 
   // Generate Audio for a Single Slide
-  const generateSlideAudio = async (slideId: string) => {
-    const slide = slides.find((s) => s.id === slideId);
-    if (!slide || !slide.script.trim()) return;
+  const generateSlideAudio = async (slideId: string, targetSlide?: ModuleSlide): Promise<boolean> => {
+    const slide = targetSlide || slides.find((s) => s.id === slideId);
+    if (!slide || !slide.script.trim()) return false;
 
     setSlides((prev) =>
       prev.map((s) => (s.id === slideId ? { ...s, status: 'generating', errorMessage: undefined } : s))
@@ -169,32 +169,46 @@ export const SlideCourseManager: React.FC<SlideCourseManagerProps> = ({ onSaveTo
           )
         );
 
-        onSaveToHistory(
-          `${courseTitle} - ${slide.title}`,
-          slide.script,
-          data.audioUrl,
-          data.duration,
-          slide.voice || globalVoice,
-          slide.style || globalStyle
-        );
+        try {
+          onSaveToHistory(
+            `${courseTitle} - ${slide.title}`,
+            slide.script,
+            data.audioUrl,
+            data.duration,
+            slide.voice || globalVoice,
+            slide.style || globalStyle
+          );
+        } catch (histErr) {
+          console.warn("Nao foi possivel salvar historico do slide", histErr);
+        }
+
+        return true;
       } else {
         throw new Error(data.error || 'Erro ao gerar áudio do slide');
       }
     } catch (err: any) {
+      const msg = err.message || 'Erro de conexão ou limite de requisições excedido.';
       setSlides((prev) =>
         prev.map((s) =>
-          s.id === slideId ? { ...s, status: 'error', errorMessage: err.message } : s
+          s.id === slideId ? { ...s, status: 'error', errorMessage: msg } : s
         )
       );
+      return false;
     }
   };
 
-  // Generate All Audio in Batch
+  // Generate All Audio in Batch with rate limit pause
   const generateAllSlidesAudio = async () => {
     setIsGeneratingBatch(true);
-    for (const slide of slides) {
-      if (slide.script.trim()) {
-        await generateSlideAudio(slide.id);
+    const validSlides = slides.filter((s) => s.script.trim());
+    
+    for (let i = 0; i < validSlides.length; i++) {
+      const slide = validSlides[i];
+      await generateSlideAudio(slide.id, slide);
+      
+      // 800ms pause between sequential batch TTS requests to prevent API rate limiting
+      if (i < validSlides.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 800));
       }
     }
     setIsGeneratingBatch(false);
@@ -341,9 +355,12 @@ export const SlideCourseManager: React.FC<SlideCourseManagerProps> = ({ onSaveTo
                   )}
 
                   {slide.status === 'error' && (
-                    <span className="flex items-center space-x-1 text-xs text-rose-400 font-semibold bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 rounded-lg">
-                      <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
-                      <span>Erro</span>
+                    <span
+                      className="flex items-center space-x-1 text-xs text-rose-400 font-semibold bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 rounded-lg"
+                      title={slide.errorMessage || 'Falha ao gerar o áudio deste slide'}
+                    >
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                      <span className="max-w-[160px] truncate">{slide.errorMessage || 'Erro'}</span>
                     </span>
                   )}
 
