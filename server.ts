@@ -64,6 +64,20 @@ function pcmToWavBuffer(pcmBuffer: Buffer, sampleRate = 24000, numChannels = 1, 
   return Buffer.concat([header, pcmBuffer]);
 }
 
+/**
+ * Converts Float32 PCM array (-1.0 to 1.0) to valid 16-bit WAV Buffer
+ */
+function floatToPcmWavBuffer(pcmFloat32Array: Float32Array, sampleRate = 22050): Buffer {
+  const numSamples = pcmFloat32Array.length;
+  const pcm16 = new Int16Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const s = Math.max(-1, Math.min(1, pcmFloat32Array[i]));
+    pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  }
+  const pcmBuffer = Buffer.from(pcm16.buffer);
+  return pcmToWavBuffer(pcmBuffer, sampleRate, 1, 16);
+}
+
 // API Health Check
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", engine: "gemini-3.1-flash-tts-preview" });
@@ -271,6 +285,90 @@ async function synthesizeChatterboxPTBR(
   };
 }
 
+let razoSession: any = null;
+let razoConfig: any = null;
+
+/**
+ * Synthesizes speech using Razo Piper ONNX model (Lucasllfs/Razo-piper-voice)
+ * Ultra-fast local CPU inference in PT-BR (22.05kHz)
+ */
+async function synthesizeRazo(
+  text: string,
+  voice = "razo_ptbr_m",
+  pacing = "normal"
+): Promise<{ audioUrl: string; duration: number; voiceUsed: string }> {
+  const modelsDir = path.join(process.cwd(), "models", "razo");
+  const modelPath = path.join(modelsDir, "pt-BR-razo-medium.onnx");
+  const configPath = path.join(modelsDir, "config.json");
+
+  // Ensure model files are downloaded locally
+  if (!fs.existsSync(modelPath) || !fs.existsSync(configPath)) {
+    console.log("⚡ Baixando modelo Razo Piper ONNX de Lucasllfs/Razo-piper-voice...");
+    fs.mkdirSync(modelsDir, { recursive: true });
+
+    const cfgRes = await fetch("https://huggingface.co/Lucasllfs/Razo-piper-voice/raw/main/config.json");
+    if (!cfgRes.ok) throw new Error("Falha ao baixar config.json do modelo Razo.");
+    fs.writeFileSync(configPath, Buffer.from(await cfgRes.arrayBuffer()));
+
+    const modelRes = await fetch("https://huggingface.co/Lucasllfs/Razo-piper-voice/resolve/main/pt-BR-razo-medium.onnx");
+    if (!modelRes.ok) throw new Error("Falha ao baixar pt-BR-razo-medium.onnx do modelo Razo.");
+    fs.writeFileSync(modelPath, Buffer.from(await modelRes.arrayBuffer()));
+    console.log("✅ Modelo Razo Piper ONNX baixado com sucesso!");
+  }
+
+  if (!razoSession || !razoConfig) {
+    console.log("⚡ Inicializando sessão ONNX do modelo Razo Piper...");
+    const ortPath = path.join(process.cwd(), "node_modules", "onnxruntime-node");
+    const ort = require(ortPath);
+    razoConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    razoSession = await ort.InferenceSession.create(modelPath);
+    console.log("✅ Modelo Razo Piper ONNX pronto para síntese local em CPU!");
+  }
+
+  const phonemeIdMap = razoConfig.phoneme_id_map || {};
+  const sampleRate = razoConfig.audio?.sample_rate || 22050;
+
+  // Convert text characters to Piper phoneme IDs
+  const phonemeIds: number[] = [1]; // Start symbol ^
+  for (const char of text.trim()) {
+    const ids = phonemeIdMap[char] || phonemeIdMap[char.toLowerCase()] || phonemeIdMap[" "] || [3];
+    for (const id of ids) {
+      phonemeIds.push(id);
+      phonemeIds.push(0); // Interspersed pad symbol _
+    }
+  }
+  phonemeIds.push(0); // End symbol _
+
+  let lengthScale = 1.0;
+  if (pacing === "pausado") lengthScale = 1.18;
+  else if (pacing === "rapido") lengthScale = 0.85;
+
+  const ortPath = path.join(process.cwd(), "node_modules", "onnxruntime-node");
+  const ort = require(ortPath);
+
+  const inputTensor = new ort.Tensor("int64", BigInt64Array.from(phonemeIds.map(BigInt)), [1, phonemeIds.length]);
+  const inputLengthsTensor = new ort.Tensor("int64", BigInt64Array.from([BigInt(phonemeIds.length)]), [1]);
+  const scalesTensor = new ort.Tensor("float32", new Float32Array([0.667, lengthScale, 0.8]), [3]);
+
+  const outputs = await razoSession.run({
+    input: inputTensor,
+    input_lengths: inputLengthsTensor,
+    scales: scalesTensor,
+  });
+
+  const pcmFloat32Array = outputs.output.data;
+  const wavBuffer = floatToPcmWavBuffer(pcmFloat32Array, sampleRate);
+  const base64Wav = wavBuffer.toString("base64");
+  const audioDataUrl = `data:audio/wav;base64,${base64Wav}`;
+  const durationSeconds = +(wavBuffer.length / (sampleRate * 2)).toFixed(1);
+
+  return {
+    audioUrl: audioDataUrl,
+    duration: durationSeconds,
+    voiceUsed: "Razo (Piper TTS PT-BR)",
+  };
+}
+
 // Single / Multi-speaker Narration Generator Endpoint
 app.post("/api/tts/generate", async (req, res) => {
   try {
@@ -287,6 +385,23 @@ app.post("/api/tts/generate", async (req, res) => {
 
     if (!text || typeof text !== "string" || !text.trim()) {
       return res.status(400).json({ error: "Texto da narração é necessário." });
+    }
+
+    // Explicit Razo Piper TTS PT-BR selection
+    if (!isMultiSpeaker && engine === "razo-piper") {
+      try {
+        const razoResult = await synthesizeRazo(text, voice, pacing);
+        return res.json({
+          audioUrl: razoResult.audioUrl,
+          duration: razoResult.duration,
+          sampleRate: 22050,
+          format: "wav",
+          voiceUsed: razoResult.voiceUsed,
+        });
+      } catch (razoErr: any) {
+        console.error("Razo Error:", razoErr);
+        return res.status(500).json({ error: "Erro ao sintetizar áudio com Razo (Piper TTS): " + razoErr.message });
+      }
     }
 
     // Explicit Chatterbox Multilingual PT-BR selection
