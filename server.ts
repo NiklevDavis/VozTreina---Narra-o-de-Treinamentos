@@ -172,8 +172,12 @@ Narrar o seguinte texto de treinamento:
     });
   } catch (err: any) {
     console.error("Error generating TTS:", err);
-    return res.status(500).json({
-      error: err.message || "Erro interno ao conectar com a API Gemini TTS.",
+    let userErrorMessage = err.message || "Erro interno ao conectar com a API Gemini TTS.";
+    if (userErrorMessage.includes("API key not valid") || userErrorMessage.includes("API_KEY_INVALID") || process.env.GEMINI_API_KEY === "MY_GEMINI_API_KEY") {
+      userErrorMessage = "Sua chave de API do Gemini (GEMINI_API_KEY) no arquivo .env é inválida ou ainda não foi configurada. Obtenha uma chave gratuita em https://aistudio.google.com/app/apikey e cole no arquivo .env.";
+    }
+    return res.status(400).json({
+      error: userErrorMessage,
     });
   }
 });
